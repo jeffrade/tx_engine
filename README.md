@@ -13,3 +13,5 @@ $ cargo build
 ```
 $ cargo run -- transactions.csv > accounts.csv
 ```
+
+#### IMPORTANT! Only if `errors.log` is empty or doesn't exist is it safe to assume accounts.csv is correct.

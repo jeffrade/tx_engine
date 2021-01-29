@@ -3,37 +3,43 @@ use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::ErrorKind;
-use transaction::Transaction;
 
-use crate::transaction;
+use crate::account::Account;
+use crate::engine;
+use crate::transaction::Transaction;
 
-pub fn read(file_path: &str) -> Result<Vec<String>, Box<dyn Error>> {
+pub fn read_and_process(file_path: &str) -> Result<(), Box<dyn Error>> {
     let mut reader = Reader::from_path(file_path)?;
     match process_transactions(reader.deserialize::<Transaction>()) {
-        Ok(transactions) => Ok(transactions),
+        Ok(transactions) => match engine::generate_client_accounts(transactions) {
+            Ok(accounts) => write_accounts_output(accounts),
+            Err(e) => Err(e),
+        },
         Err(e) => Err(e),
     }
 }
 
+/// This needs to be optimized for performance!
 fn process_transactions(
     row_itr: DeserializeRecordsIter<File, Transaction>,
-) -> Result<Vec<String>, Box<dyn Error>> {
-    let mut results: Vec<String> = Vec::new();
+) -> Result<Vec<Transaction>, Box<dyn Error>> {
+    let mut transactions: Vec<Transaction> = Vec::new();
     let mut errors: Vec<String> = Vec::new();
     for row in row_itr {
-        let tx: Option<Transaction> = match row {
-            Ok(row) => Some(row),
+        // We're collecting errors and continuing to process rows knowing
+        // that client accounts may be inaccurate. If `errors.log` is not
+        // empty, use accounts.csv for debugging purposes only!
+        match row {
+            Ok(row) => {
+                transactions.push(row);
+            }
             Err(e) => {
                 errors.push(e.to_string());
-                None
             }
         };
-        if tx.is_some() {
-            results.push(format!("{:?}", tx.unwrap()));
-        }
     }
     match errors.len() {
-        0 => Ok(results),
+        0 => Ok(transactions),
         _ => {
             log_errors(errors);
             Err(Box::new(std::io::Error::new(
@@ -55,9 +61,18 @@ fn log_errors(errors: Vec<String>) {
     }
 }
 
+/// Writes to stdout here
+fn write_accounts_output(accounts: Vec<Account>) -> Result<(), Box<dyn Error>> {
+    let mut writer = csv::Writer::from_writer(std::io::stdout());
+    for account in accounts {
+        writer.serialize(account)?;
+    }
+    writer.flush()?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     #[test]
     fn test_something() {

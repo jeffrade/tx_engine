@@ -6,29 +6,30 @@ extern crate csv;
 #[macro_use]
 extern crate serde_derive;
 
+mod account;
 mod csv_io;
+mod engine;
 mod transaction;
 
 fn main() {
     init();
     match start() {
-        Ok(results) => println!("{:?}", results),
+        Ok(_) => (),
         Err(e) => {
             eprintln!("ERROR: {:?}", e);
         }
     };
 }
 
-fn start() -> Result<Vec<String>, Box<dyn Error>> {
+fn start() -> Result<(), Box<dyn Error>> {
     let file_path: String = match get_arg(1) {
         Ok(file_path) => file_path,
         Err(e) => return Err(e),
     };
-    let results = match csv_io::read(&file_path) {
-        Ok(results) => Ok(results),
+    match csv_io::read_and_process(&file_path) {
+        Ok(_) => Ok(()),
         Err(e) => Err(e),
-    };
-    results
+    }
 }
 
 /// Just a simple function to extract args out of `main()`.
@@ -37,10 +38,6 @@ fn start() -> Result<Vec<String>, Box<dyn Error>> {
 fn get_arg(position: usize) -> Result<String, Box<dyn Error>> {
     let args: Vec<String> = env::args().collect();
     if position >= args.len() {
-        // Err(Error::new(
-        //     ErrorKind::Other,
-        //     "You did not provide enough arguments!",
-        // ))
         Err(Box::new(std::io::Error::new(
             ErrorKind::Other,
             "You did not provide enough arguments!",
@@ -51,10 +48,7 @@ fn get_arg(position: usize) -> Result<String, Box<dyn Error>> {
 }
 
 fn init() {
-    // Clean up file from last run, ignore if not present or
-    // open (if open, will correctly signal downstream).
-    match std::fs::remove_file("errors.log") {
-        Ok(_) => (),
-        Err(_) => (),
-    }
+    // Clean up error file from last run, ignore if not present or
+    // open (if open, will correctly Err downstream).
+    if std::fs::remove_file("errors.log").is_ok() {}
 }
